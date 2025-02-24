@@ -1,36 +1,59 @@
 import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output, State
+import dash_bootstrap_components as dbc
+from dash import dcc, html, Input, Output, State
 import plotly.express as px
 import pandas as pd
 
+app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
+server = app.server
+
 # Sample datasets
 datasets = {
-    "Fruits": ["Apples", "Bananas", "Cherries", "Dates","Pineapple"],
-    "Countries": ["USA", "Canada", "Mexico", "Brazil"],
-    "Products": ["Laptops", "Tablets", "Smartphones", "Desktops"]
+    "Fruits": ["Apple", "Banana", "Orange"],
+    "Vegetables": ["Carrot", "Broccoli", "Spinach"]
 }
+data_values = {dataset: [10, 15, 20] for dataset in datasets.keys()}
 
-# Initialize the Dash app
-app = dash.Dash(__name__)
-
-app.layout = html.Div([
-    html.H1("Dynamic Bar Chart Generator", style={'textAlign': 'center'}),
+app.layout = dbc.Container([
+    html.H1("Dynamic Bar Chart Generator", className="text-center text-primary mt-4"),
     
-    html.Label("Select Dataset:"),
-    dcc.Dropdown(
-        id='dataset-dropdown',
-        options=[{'label': key, 'value': key} for key in datasets.keys()],
-        value='Fruits'
-    ),
+    dbc.Row([
+        dbc.Col([
+            html.Label("Select Dataset:", className="fw-bold"),
+            dcc.Dropdown(id='dataset-dropdown', 
+                         options=[{'label': k, 'value': k} for k in datasets.keys()], 
+                         value=list(datasets.keys())[0],
+                         className="mb-3"),
+        ], width=6)
+    ], justify="center"),
     
-    html.Label(id='values-hint', style={'font-weight': 'bold', 'margin-top': '10px'}),
+    dbc.Row([
+        dbc.Col([
+            html.Label(id='values-hint', className="fw-bold text-info"),
+            dcc.Input(id='values-input', type='text', value="", className="form-control mb-3"),
+        ], width=6)
+    ], justify="center"),
     
-    dcc.Input(id='values-input', type='text', value='', style={'width': '100%'}),
+    dbc.Row([
+        dbc.Col([
+            dbc.Button("Update Chart", id='update-button', n_clicks=0, color="primary", className="mb-4")
+        ], width=6, className="text-center")
+    ], justify="center"),
     
-    html.Button("Submit", id='submit-button', n_clicks=0),
+    dbc.Row([
+        dbc.Col([
+            html.Label("Create New Dataset:", className="fw-bold"),
+            dcc.Input(id='new-dataset-name', type='text', placeholder='Dataset Name', className="form-control mb-2"),
+            dcc.Input(id='new-dataset-items', type='text', placeholder='Items (comma-separated)', className="form-control mb-3"),
+            dbc.Button("Create Dataset", id='create-dataset-button', n_clicks=0, color="success", className="mb-4")
+        ], width=6)
+    ], justify="center"),
     
-    dcc.Graph(id='bar-chart')
+    dbc.Row([
+        dbc.Col([
+            dcc.Graph(id='bar-chart', className="border rounded p-3 shadow")
+        ], width=10)
+    ], justify="center")
 ])
 
 @app.callback(
@@ -43,7 +66,7 @@ def update_hint(dataset):
 
 @app.callback(
     Output('bar-chart', 'figure'),
-    Input('submit-button', 'n_clicks'),
+    Input('update-button', 'n_clicks'),
     State('dataset-dropdown', 'value'),
     State('values-input', 'value')
 )
@@ -53,16 +76,30 @@ def update_chart(n_clicks, dataset, values):
     
     try:
         values_list = [float(v.strip()) for v in values.split(',')]
-        categories = datasets[dataset]
-        
-        if len(values_list) != len(categories):
+        if len(values_list) != len(datasets[dataset]):
             return px.bar(title="Number of values must match number of categories.")
         
-        df = pd.DataFrame({"Category": categories, "Value": values_list})
-        fig = px.bar(df, x="Category", y="Value", title=f"Bar Chart for {dataset}")
-        return fig
+        data_values[dataset] = values_list
+        df = pd.DataFrame({"Category": datasets[dataset], "Values": data_values[dataset]})
+        return px.bar(df, x='Category', y='Values', title=f"Dataset: {dataset}", color_discrete_sequence=["#007bff"])
     except ValueError:
         return px.bar(title="Please enter numerical values only.")
+
+@app.callback(
+    Output('dataset-dropdown', 'options'),
+    Output('dataset-dropdown', 'value'),
+    Input('create-dataset-button', 'n_clicks'),
+    State('new-dataset-name', 'value'),
+    State('new-dataset-items', 'value')
+)
+def create_dataset(n_clicks, name, items):
+    if not name or not items:
+        return [{'label': k, 'value': k} for k in datasets.keys()], list(datasets.keys())[0]
+    
+    datasets[name] = items.split(',')
+    data_values[name] = [0] * len(datasets[name])
+    options = [{'label': k, 'value': k} for k in datasets.keys()]
+    return options, name
 
 if __name__ == '__main__':
     app.run_server(debug=True)
